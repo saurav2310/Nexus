@@ -1,0 +1,78 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  workflows Workflow[]
+  runs      WorkflowRun[]
+
+  @@map("tenants")
+}
+
+model Workflow {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  name      String
+  // The DAG: an array of step definitions (type, config, dependsOn)
+  // Kept as JSON for now — we'll talk about why, and its limits, in Lesson 2.
+  definition Json
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id])
+  runs   WorkflowRun[]
+
+  @@index([tenantId])
+  @@map("workflows")
+}
+
+model WorkflowRun {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  workflowId String   @map("workflow_id")
+  status     String   @default("pending") // pending | running | succeeded | failed
+  input      Json?
+  output     Json?
+  startedAt  DateTime?
+  finishedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  tenant   Tenant     @relation(fields: [tenantId], references: [id])
+  workflow Workflow   @relation(fields: [workflowId], references: [id])
+  steps    StepRun[]
+
+  @@index([tenantId])
+  @@index([workflowId])
+  @@map("workflow_runs")
+}
+
+model StepRun {
+  id           String    @id @default(uuid())
+  tenantId     String    @map("tenant_id")
+  runId        String    @map("run_id")
+  stepName     String
+  stepType     String    // "http" | "transform" | "agent"
+  status       String    @default("pending")
+  input        Json?
+  output       Json?
+  costUsd      Decimal?  @map("cost_usd") @db.Decimal(10, 6)
+  startedAt    DateTime?
+  finishedAt   DateTime?
+
+  run WorkflowRun @relation(fields: [runId], references: [id])
+
+  @@index([tenantId])
+  @@index([runId])
+  @@map("step_runs")
+}
