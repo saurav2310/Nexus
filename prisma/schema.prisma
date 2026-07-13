@@ -61,11 +61,12 @@ model StepRun {
   id           String    @id @default(uuid())
   tenantId     String    @map("tenant_id")
   runId        String    @map("run_id")
-  stepName     String
+  stepName     String    @map("step_name")
   stepType     String    // "http" | "transform" | "agent"
-  status       String    @default("pending")
+  status       String    @default("pending") // pending | running | succeeded | failed
   input        Json?
   output       Json?
+  errorMessage String?   @map("error_message")
   costUsd      Decimal?  @map("cost_usd") @db.Decimal(10, 6)
   startedAt    DateTime?
   finishedAt   DateTime?
@@ -74,5 +75,11 @@ model StepRun {
 
   @@index([tenantId])
   @@index([runId])
+  // This is the load-bearing constraint for idempotency: it is physically
+  // impossible for two StepRun rows to exist for the same step in the same
+  // run. Combined with the "claim" pattern in the processor (an atomic
+  // conditional UPDATE), this is what makes retries and duplicate job
+  // enqueues safe.
+  @@unique([runId, stepName])
   @@map("step_runs")
 }
